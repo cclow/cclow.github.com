@@ -1,0 +1,245 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: Programming | Chin Chau's Dev Notes]]></title>
+  <link href="http://cclow.github.com/blog/categories/programming/atom.xml" rel="self"/>
+  <link href="http://cclow.github.com/"/>
+  <updated>2012-04-16T18:20:07+08:00</updated>
+  <id>http://cclow.github.com/</id>
+  <author>
+    <name><![CDATA[Low Chin Chau]]></name>
+    
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[Crazy fast Web App with PushState]]></title>
+    <link href="http://cclow.github.com/blog/2012/03/22/crazy-fast-web-app-with-pushstate/"/>
+    <updated>2012-03-22T00:00:00+08:00</updated>
+    <id>http://cclow.github.com/blog/2012/03/22/crazy-fast-web-app-with-pushstate</id>
+    <content type="html"><![CDATA[<h2>tl;dr</h2>
+
+<p>Implement crazy fast web applications that's degrdable,
+search-friendly, bookmark-able, navigable using HTML5 PushState with
+either <code>PJAX</code> or <code>backbone.js</code>.</p>
+
+<h2>Background</h2>
+
+<p>This is an experiment inspried by a
+<a href="http://groups.google.com/group/singapore-rb/browse_thread/thread/ee401e45fd5469f2" title="Single page JS webapps - how to do them right?">discussion on Singapore Ruby Brigade</a> and an earlier
+<a href="http://news.ycombinator.com/item?id=3603367" title="How Basecamp Next got to be so damn fast without using much client-side UI">discussion on Hacker News</a> between jashkenas an dhh.</p>
+
+<h3>Speed is the most important feature</h3>
+
+<p>Fred Wilson says it best in an <a href="http://thinkvitamin.com/web-apps/fred-wilsons-10-golden-principles-of-successful-web-apps/" title="Fred Willson Interview">Interview</a>:</p>
+
+<blockquote><p>Speed is the most important feature. If your application is slow,
+people won't use it.</p></blockquote>
+
+<p>In addition, there's been a number of studies relating web application
+speed to user satisfaction, retention, and ultimately to revenue and
+profit.</p>
+
+<p>One common approach to speeding up web apps is to adopt implement
+aggressive caching and best practices such as those exemplified by
+Yahoo's <a href="http://developer.yahoo.com/performance/rules.html" title="Yahoo Optimization Rules">Best Practices for Speeding Up Your Web Site</a>. This
+is a pre-matured optimization at best, and is really missing the big
+issue--unnecessary requests and duplicated contents in responses.</p>
+
+<p>If one looks at the components of a web page, it is easy to see that
+only a small portion of the content change between different pages
+within an application. With every state change, typical web
+applications would request and receive entire page and its many linked
+components (including CSS and Javascript files). This not only slows
+down the response, it exerts an unnecessary load on the network
+bandwidth and server.</p>
+
+<h2>AJAX and SPA are only partial solutions</h2>
+
+<p>AJAX and Single Page Applications are attempts to solve this problem
+by restricting the response to dynamic data, and constructing the
+presentation on the client using JavaScript. This approach works but
+frequently suffers from the following constraints:</p>
+
+<ol>
+<li><p>Not usable without JavaScript (a.k.a. not degradable). The data and
+presentation are often loaded and constructed using JavaScript.</p></li>
+<li><p>Not search-friendly. Most search engines cannot load and construct
+the page with JavaScript.  Some efforts to solve this, e.g.
+<a href="http://www.seomoz.org/blog/how-to-allow-google-to-crawl-ajax-content" title="How To: Allow Google to Crawl your AJAX Content">with Hashbangs</a> ("#!" in the URL for the uninitiated), has resulted in
+much ugliness and little solution.</p></li>
+<li><p>Not bookmark-able. Different content pages share the same URL and
+title, so bookmarking any page would only get a user back to a
+starting page.</p></li>
+<li><p>Not navigable. Back and forward browser buttons does not navigate
+the application states as expected.</p></li>
+</ol>
+
+
+<p>(In addition, I also find JavaScript programming taxing and try to do
+as little of it as possible. But that's another story.)</p>
+
+<h2>HTML5 PushState</h2>
+
+<p>To solve the bookmark and navigation problem, HTML5 introduced
+<a href="http://diveintohtml5.info/history.html" title="Manipulating History For Fun &amp; Profit">PushState</a>, as mechanism for manipulating the URL and title,
+allowing the unique identification of each application state. This
+still requires the server to respond with a rendered pages to the URL.</p>
+
+<p>This led to two different solutions, <code>PJAX</code> and a JavaScript Framework
+like <code>backbone.js</code>. I initially attempted to combine both into the same
+application but ended up with two separate versions. The source code
+for the applications demonstrating <code>PJAX</code> and Backbone are on
+<a href="https://github.com/cclow/PushState-Demo-w-PJAX-and-Backbone" title="cclow/PushState-Demo-w-PJAX-and-Backbone">github</a>. The versions are in their individual branches, and
+master contains the plain jane application.</p>
+
+<h3><code>PJAX</code> version</h3>
+
+<p>The <code>PJAX</code> version is by much easier to implement, especially with
+<a href="https://github.com/defunkt/jquery-pjax" title="defunkt/jquery-pjax">jquery-pjax.js</a>.</p>
+
+<p>The controller action is modified to handle the <code>PJAX</code> request.</p>
+
+<pre><code>## app/controllers/articles_controller.rb
+class ArticlesController &lt; ApplicationController
+
+  # ...
+
+  def show
+    # ...
+    if request.headers['X-PJAX']
+      render 'pjax_show', layout: false
+    else
+      respond_with @article
+    end
+  end
+end
+</code></pre>
+
+<p>A new view is used to attach the title and JavaScript for highlighting
+the active article in the articles list. DRYness is maintained by
+using the same partial is still being used for the content.</p>
+
+<pre><code>## app/views/articles/pjax_show.html.haml
+
+%title= @title
+= render 'articles/article_content'
+:javascript
+  App.setActiveArticle("#article_#{@active}")
+</code></pre>
+
+<p>The <code>PJAX</code> action is triggered by the pjax call unobtrusively. If
+JavaScript is not enabled, the application would still function.</p>
+
+<pre><code>## app/assets/javascripts/articles.js.coffee
+
+window.App = {}
+
+App.setActiveArticle = (active_id) -&gt;
+  $('.article.active').removeClass('active')
+  $(active_id).addClass('active')
+
+$ -&gt;
+  $('.article_link').pjax('#article_content')
+</code></pre>
+
+<h3><code>backbone.js</code> with PushState</h3>
+
+<p>The <code>backbone.js</code> version takes more work.</p>
+
+<p>Since I'm using Rails as the server platform, the partial template
+should be usable from both Ruby and JavaScript to maintain
+DRYness. This is particularly important for consistency and
+maintainability when the dynamic contents gets more complex. For this
+purpose, I'd used Mustache through the <code>stache</code> gem for this purpose.</p>
+
+<pre><code>## app/templates/articles/article_content.html.mustache
+
+&lt;div class="article_content" id="article_content_"&gt;
+  &lt;p&gt;&lt;/p&gt;
+&lt;/div&gt;
+
+</code></pre>
+
+<p>Also, the template is included into the application for use through ICanHax.js.</p>
+
+<pre><code>## app/views/layouts/application.html.haml
+
+# ...
+= template_include_tag 'articles/article_content'
+# ...
+</code></pre>
+
+<p><code>liquid</code> has recently been <a href="https://github.com/darthapo/liquid.js" title="darthapo/liquid.js">ported to JavaScript</a> so that's
+another potential option.</p>
+
+<p>The <code>gon</code> gem is used to inject the artciles collection as a hash into the <code>backbone.js</code> application.</p>
+
+<pre><code>## app/controllers/articles_controller.rb
+class ArticlesController &lt; ApplicationController
+
+  # ...
+
+  def show
+    # ...
+    gon.articles = @articles = Article.all
+    # ...
+  end
+end
+</code></pre>
+
+<p>and</p>
+
+<pre><code>## app/views/layouts/application.html.haml
+
+# ...
+= include_gon
+# ...
+</code></pre>
+
+<p>Finally the <code>backbone.js</code> app. This is not much different from a
+standard <code>backbone.js</code> application without the PushState, so I'll just
+focus on the difference.</p>
+
+<pre><code># ...
+$ -&gt;
+  router = new App.ArticlesRouter(gon.articles)
+  $(document).on 'click', 'a', (e) -&gt;
+    e.preventDefault()
+    href = $(this).attr('href')
+    router.navigate(href, true)
+  Backbone.history.start({pushState: true, silent: true})
+# ...
+</code></pre>
+
+<p>The behavior of the links is replaced by navigation through the
+router. Also, we turn on <code>pushState</code> and <code>silent</code> (since the first
+page would be fully rendered already).</p>
+
+<h2>Results and Comparisons</h2>
+
+<p>In the <code>PJAX</code> demo implementation, the load time is reduced by a
+factor of 30, and the network bandwidth by about the same amount. Of
+course this is largely dependent on the application, so try it out for
+yourself. The <code>backbone.js</code> version took a little longer to load the
+first page, but subsequent pages can be rendered entirely in the
+browser if the data set is small. Again, this is application specific
+so YMMV.</p>
+
+<p>As I alluded to before, the <code>PJAX</code> version is much easier to
+implement. There is much less and much simpler JavaScript, and I also
+do not have to learn a new templating language. Overall this is a good
+effort / performance tradeoff.</p>
+
+<p>The <code>backbone.js</code> version takes more work, but can potentially be much
+faster especially as a SPA. With some additional effort, it can also
+be implemented to work in disconnected or offline mode.</p>
+
+<p>Unfortunately, these 2 methods are somewhat conflicting if you try to
+implement them in the same application, so just choose the one closest
+to your circumstance.</p>
+]]></content>
+  </entry>
+  
+</feed>
